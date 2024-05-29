@@ -14,31 +14,17 @@
 #'               four = c(FALSE, TRUE, TRUE, TRUE))
 #' opposite_indices <- check_patterns(patterns)
 #' 
-check_patterns <- function(patterns_ret){
-  ## Check that there are at least two opposing patterns
-  # Get the number of rows in the tibble
-  num_rows <- nrow(patterns_ret)
-  
-  # Initialize a list to store the indices of opposite rows
+check_patterns <- function(patterns) {
   opposite_indices <- list()
-  
-  # Generate all possible combinations of row indices
-  row_combinations <- expand.grid(1:num_rows, 1:num_rows)
-  
-  # Iterate over each combination of row indices
-  for (i in 1:nrow(row_combinations)) {
-    # Get the row indices for comparison
-    row_index1 <- row_combinations[i, 1]
-    row_index2 <- row_combinations[i, 2]
-    
-    # Check if the rows are opposite
-    if (all(patterns_ret[row_index1, ] != patterns_ret[row_index2, ])) {
-      opposite_indices <- c(opposite_indices, list(c(row_index1, row_index2)))
+  for (i in 1:(nrow(patterns) - 1)) {
+    for (j in (i + 1):nrow(patterns)) {
+      if (all(patterns[i, ] == !patterns[j, ])) {
+        opposite_indices <- append(opposite_indices, list(c(i, j)))
+      }
     }
   }
   return(opposite_indices)
 }
-
 
 #' make_cluster_patterns
 #' 
@@ -66,41 +52,37 @@ check_patterns <- function(patterns_ret){
 #' patterns <- make_cluster_patterns(numcells = length(cell_types), 
 #'     clusters = 8)
 #' 
-make_cluster_patterns <- function(numcells = 4, clusters = 8){
-  
+make_cluster_patterns <- function(numcells = 4, clusters = 8) {
   patterns <- tibble::tibble()
   col_names <- paste0("Var", 1:numcells)
   
-  for (i in 0:(2^numcells - 1)) {
-    boolArr <- vector(mode = "logical", length = numcells)
+  # Loop until we find a suitable pattern matrix
+  repeat {
+    # Generate all possible patterns
+    patterns <- tibble::tibble()
+    for (i in 1:(2^numcells)) {
+      # Make it a bigger probability to have FALSE than true
+      # To be conservative with the expression values.
+      boolArr <- runif(numcells) > 0.85
+      patterns <- rbind(patterns, boolArr)
+    }
+    colnames(patterns) <- col_names
     
-    # Increasing or decreasing depending on which direction
-    # you want your array to represent the binary number
-    for (j in (numcells - 1):0) {
-      boolArr[j + 1] <- as.logical(bitwAnd(i, 2^j))
+    # Sample the required number of clusters
+    patterns_ret <- slice_sample(patterns, n = clusters)
+    
+    # Check for duplicate rows
+    if (any(duplicated(patterns_ret))) {
+      next
     }
     
-    patterns <- rbind(patterns, boolArr)
-  }
-  
-  colnames(patterns) <- col_names
-  # Subset to number of clusters the user wants
-  patterns_ret <- dplyr::slice_sample(patterns, n = clusters)
-  
-  opposite_indices <- check_patterns(patterns_ret)
-  
-  # Check if opposite rows were found, if not, sample again, we need at least
-  # two rows that are opposite
-  if (length(opposite_indices) < 1){
-    for (e in 1:10){
-      # Try again
-      patterns_ret <- dplyr::slice_sample(patterns, n = clusters)
-      opposite_indices <- check_patterns(patterns_ret)
-      if (length(opposite_indices) >= 1){
-        break
-      }
+    # Check for opposite patterns
+    opposite_indices <- check_patterns(patterns_ret)
+    if (length(opposite_indices) >= 1) {
+      break
     }
   }
+  
   return(list("patterns" = patterns_ret, "opposite_indices" = opposite_indices))
 }
 

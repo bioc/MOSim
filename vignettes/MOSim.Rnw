@@ -9,7 +9,8 @@ BiocStyle::latex()
 options(tidy.opts=list(blank=FALSE, width.cutoff=60))
 @
 \usepackage{tikz}
-% \usepackage[usenames, dvipsnames]{color}
+\definecolor{fgcolor}{rgb}{255,0,0}
+% \usepackage[usenames, dvipsnames]{xcolor}
 \usetikzlibrary{positioning}
 
 

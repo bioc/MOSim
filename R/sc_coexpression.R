@@ -259,34 +259,24 @@ simulate_coexpression <- function(sim_matrix,
 #' selected divided by the number of clusters for which co-expression patterns
 #' where supplied.
 
-shuffle_group_matrix <- function(sim_data, feature_ids, group_pattern, ngroups){
+shuffle_group_matrix <- function(sim_data, feature_ids, group_pattern, ngroups) {
   
-  # select top and bottom features in group
-  top <- dplyr::select(feature_ids, top) %>% unlist
-  bottom <- dplyr::select(feature_ids, bottom) %>% unlist
+  top <- feature_ids$top
+  bottom <- feature_ids$bottom
   
-  # random partitioning of features
-  # top
-  top.shuffle <- sample(length(top))
-  top <- top[top.shuffle]
-  top.list <- split(top, cut(seq(1, length(top)), breaks = ngroups, labels = FALSE))
-  # bottom
-  bottom.shuffle <- sample(length(bottom))
-  bottom <- bottom[bottom.shuffle]
-  bottom.list <- split(bottom, cut(seq(1, length(bottom)), breaks = ngroups, labels = FALSE))
+  top <- sample(top)
+  top.list <- split(top, cut(seq_along(top), breaks = ngroups, labels = FALSE, include.lowest = TRUE))
   
-  # bind features following pattern
-  features_bound <- vector(mode = "list", length = length(group_pattern))
-  # Remove harmless warning
-  suppressWarnings(features_bound[group_pattern] <- top.list)
-  suppressWarnings(features_bound[!group_pattern] <- bottom.list)
+  bottom <- sample(bottom)
+  bottom.list <- split(bottom, cut(seq_along(bottom), breaks = ngroups, labels = FALSE, include.lowest = TRUE))
+  
+  features_bound <- vector("list", length(group_pattern))
+  features_bound[group_pattern] <- top.list[1:sum(group_pattern)]
+  features_bound[!group_pattern] <- bottom.list[1:sum(!group_pattern)]
   features_bound <- unlist(features_bound)
   
-  # build expression matrix for group
-  sim_data.mod <- sim_data %>%
-    dplyr::filter(feature %in% features_bound) %>%
-    tibble::column_to_rownames("feature")
-  sim_data.mod <- sim_data.mod[features_bound,] %>% tibble::rownames_to_column("feature")
+  sim_data.mod <- sim_data[sim_data$feature %in% features_bound, ]
+  sim_data.mod <- sim_data.mod[match(features_bound, sim_data.mod$feature), , drop = FALSE]
   
   return(sim_data.mod)
 }
@@ -536,3 +526,250 @@ order_FC_forMatrix <- function(A, B, C, D){
   # Print the resulting vector
   return(result)
 }
+
+
+#' calculate_mean_per_list_df
+#' 
+#' Helper function to calculate mean expression per celltype
+#'
+#' @param df dataframe of expression where columns are cells
+#' @param named_lists list of which cells belong to each celltype
+#'
+#' @export
+#'
+#' @examples
+#' rna <- data.frame(c1 = c(1.5, 15.5, 3.5, 20.5), c2 = c(2, 15, 4, 20), 
+#'           c3 = c(10, 1, 12, 13), c4 = c(11, 1, 13, 14))
+#' cell_types <- list("ct1" = c(1,2), "ct2" = c(3, 4))
+#' calculate_mean_per_list_df(rna, cell_types)
+calculate_mean_per_list_df <- function(df, named_lists) {
+  means <- list()
+  for (name in names(named_lists)) {
+    columns <- named_lists[[name]]
+    means[[name]] <- rowMeans(df[, columns, drop = FALSE])
+  }
+  # Combine the list of means into a dataframe
+  means_df <- do.call(cbind, means)
+  # Add column names
+  colnames(means_df) <- names(named_lists)
+  return(as.data.frame(means_df))
+}
+
+
+#' match_gene_regulator
+#' 
+#' Helper function to make the most similar profiles possible between
+#' gene and regulator
+#'
+#' @param rna dataframe of RNA expression
+#' @param atac dataframe of ATAC expression
+#' @param cell_types list of which cells belong to each celltype
+#' @param associationList dataframe of two columns, Gene_ID and Peak_ID
+#'
+#' @export
+#'
+#' @examples
+#' rna <- data.frame(c1 = c(1.5, 15.5, 3.5, 20.5), c2 = c(2, 15, 4, 20), 
+#'         c3 = c(10, 1, 12, 13), c4 = c(11, 1, 13, 14), c5 = c(7, 0, 0, 0), 
+#'         c6 = c(8, 1, 1, 1), c7 = c(8, 1, 1, 1))
+#' rownames(rna) <- c('GenB', 'GenA', 'GenC', 'GenD')
+#' associationList <- data.frame(Gene_ID = c('GenA', 'GenB', 'GenC', 'GenA'),
+#'         Peak_ID = c('PeakA', 'PeakB', 'PeakC', 'PeakD'))
+#' cell_types <- list("ct1" = c(1,2), "ct2" = c(3, 4), "ct3" = c(5, 6), "ct4" = c(7))
+#' atac <- data.frame(c1 = c(3,20, 1,15, 1, 7, 1), c2 = c(4,20, 2,15, 0, 5, 1.5), 
+#'         c3 = c(10, 13, 1, 12, 1, 14, 9), c4 = c(11, 14, 1, 13, 1, 4, 12), 
+#'         c5 = c(0, 0, 0, 7, 1, 6, 6), c6 = c(1, 1, 1, 8, 0, 5, 8), 
+#'         c7 = c(1, 1, 1, 8, 1, 5, 7))
+#' rownames(atac) <- c('PeakB', "PeakC", "PeakF", "PeakD", "PeakE", "PeakA", "PeakG")
+#' match_gene_regulator(rna, atac, cell_types, associationList)
+match_gene_regulator <- function(rna, atac, cell_types, associationList){
+  ## Prepare the dataframes:
+  
+  # Add a suffix to each duplicate occurrence in associationList
+  associationList <- associationList %>%
+    group_by(Gene_ID) %>%
+    mutate(dup_index = row_number() - 1,
+           Gene_ID = ifelse(dup_index > 0, paste0(Gene_ID, "_dup", dup_index), Gene_ID)) %>%
+    select(-dup_index) %>%
+    ungroup()
+  
+  # Check for duplicates in Gene_ID column
+  duplicate_genes <- associationList$Gene_ID[grepl("_dup", associationList$Gene_ID)]
+  
+  # Duplicate rows in rna dataframe based on duplicates in associationList
+  for (gene in duplicate_genes) {
+    # Extract the base gene name
+    base_gene <- sub("_dup[0-9]+$", "", gene)
+    
+    # Find the row in rna dataframe corresponding to the base gene
+    rna_row <- rna[rownames(rna) == base_gene, ]
+    
+    # Append the row to the rna dataframe
+    rna <- rbind(rna, rna_row)
+    
+    # Update the row names
+    rownames(rna)[nrow(rna)] <- gene
+  }
+  
+  
+  ## Sort dataframes according to the association list order
+  rna <- rna[order(match(rownames(rna), as.vector(associationList$Gene_ID))), , drop = FALSE]
+  atac <- atac[order(match(rownames(atac), as.vector(associationList$Peak_ID))), , drop = FALSE]
+  
+  mean_rna <- calculate_mean_per_list_df(rna, cell_types)
+  mean_atac <- calculate_mean_per_list_df(atac, cell_types)
+  
+  # Target values
+  target_values <- as.numeric(as.data.frame(mean_rna)[[1]])
+  
+  # Function to find the most similar element and its index, avoiding used indexes
+  find_most_similar <- function(values, target, used_indexes) {
+    # Calculate the absolute differences, ignoring used indexes
+    differences <- abs(values - target)
+    differences[used_indexes] <- Inf  # Set used indexes to Inf to avoid selecting them
+    min_index <- which.min(differences)
+    return(list(element = values[min_index], index = min_index))
+  }
+  
+  # Initialize list to store results
+  results <- list(elements = numeric(length(target_values)), indexes = integer(length(target_values)))
+  
+  # Vector to keep track of used indexes
+  used_indexes <- integer(0)
+  
+  # Find most similar elements and their indexes
+  for (i in seq_along(target_values)) {
+    res <- find_most_similar(mean_atac[[1]], target_values[i], used_indexes)
+    results$elements[i] <- res$element
+    results$indexes[i] <- res$index
+    used_indexes <- c(used_indexes, res$index)
+  }
+  
+  new_mean_atac <- data.frame(results$elements)
+  colnames(new_mean_atac) <- names(mean_rna)[[1]]
+  new_indexes_atac <- data.frame(results$indexes)
+  colnames(new_indexes_atac) <- names(mean_rna)[[1]]
+  
+  for (j in 2:length(colnames(mean_atac))) {
+    prev_ct <- names(mean_rna)[j - 1]
+    curr_ct <- names(mean_rna)[j]
+    
+    differences_rna <- mean_rna[[prev_ct]] - mean_rna[[curr_ct]]
+    results_curr <- data.frame(elements = numeric(length(differences_rna)), indexes = integer(length(differences_rna)))
+    used_indexes_curr <- integer(0)
+    
+    for (i in seq_along(differences_rna)) {
+      target_diff <- differences_rna[i]
+      res <- find_most_similar(mean_atac[[curr_ct]], new_mean_atac[[prev_ct]][i] - target_diff, used_indexes_curr)
+      results_curr$elements[i] <- res$element
+      results_curr$indexes[i] <- res$index
+      used_indexes_curr <- c(used_indexes_curr, res$index)
+    }
+    
+    new_mean_atac[[curr_ct]] <- results_curr$elements
+    new_indexes_atac[[curr_ct]] <- results_curr$indexes
+  }
+  
+  # Get unique values in each column
+  unique_values <- lapply(new_indexes_atac, unique)
+  
+  # Find missing numbers from 1 to 10 for each column
+  missing_numbers <- lapply(unique_values, function(x) setdiff(1:nrow(mean_atac), x))
+  
+  # Add missing indexes
+  new_indexes_atac <- rbind(new_indexes_atac, missing_numbers)
+  
+  ## Get the values from those indices from atac
+  new_atac <- data.frame(matrix(ncol = ncol(atac), nrow = nrow(atac)))
+  colnames(new_atac) <- colnames(atac)
+  rownames(new_atac) <- rownames(atac)
+  
+  # Populate the new_atac data frame with the values from atac according to new_indexes_atac and cell_types
+  for (cell_type in colnames(new_indexes_atac)) {
+    # Get the indices for the current cell type
+    indices <- new_indexes_atac[[cell_type]]
+    
+    # Get the columns in atac that correspond to the current cell type
+    columns <- cell_types[[cell_type]]
+    
+    # Extract and reorder values for each column according to the indices
+    for (col in columns) {
+      new_atac[, col] <- atac[indices, col]
+    }
+  }
+  
+  # Function to remove the added rows
+  remove_added_rows <- function(dataframe) {
+    return(dataframe[!grepl("_dup[0-9]+$", rownames(dataframe)), ])
+  }
+  
+  # Remove the added rows
+  rna <- remove_added_rows(rna)
+  atac <- new_atac
+  return(list("atac" = atac, "rna" = as.data.frame(as.matrix(rna))))
+}
+
+
+
+#' match_gene_regulator_cluster
+#'
+#' @param rna rna expression dataframe
+#' @param atac atac expression dataframe
+#' @param cell_types list of which cells belong to each celltype
+#' @param associationMatrix matrix of related genes and peaks
+#'
+#' @export
+#'
+#' @examples
+#' #' rna <- data.frame(c1 = c(1.5, 15.5, 3.5, 20.5), c2 = c(2, 15, 4, 20), 
+#'         c3 = c(10, 1, 12, 13), c4 = c(11, 1, 13, 14), c5 = c(7, 0, 0, 0), 
+#'         c6 = c(8, 1, 1, 1), c7 = c(8, 1, 1, 1))
+#' rownames(rna) <- c('GenB', 'GenA', 'GenC', 'GenD')
+#' associationList <- data.frame(Gene_ID = c('GenA', 'GenB', 'GenC', 'GenA'),
+#'         Peak_ID = c('PeakA', 'PeakB', 'PeakC', 'PeakD'),
+#'         Gene_cluster = c(1, 2, 1, 2), Peak_cluster = c(1, 2, 1, 2))
+#' cell_types <- list("ct1" = c(1,2), "ct2" = c(3, 4), "ct3" = c(5, 6), "ct4" = c(7))
+#' atac <- data.frame(c1 = c(3,20, 1,15, 1, 7, 1), c2 = c(4,20, 2,15, 0, 5, 1.5), 
+#'         c3 = c(10, 13, 1, 12, 1, 14, 9), c4 = c(11, 14, 1, 13, 1, 4, 12), 
+#'         c5 = c(0, 0, 0, 7, 1, 6, 6), c6 = c(1, 1, 1, 8, 0, 5, 8), 
+#'         c7 = c(1, 1, 1, 8, 1, 5, 7))
+#' rownames(atac) <- c('PeakB', "PeakC", "PeakF", "PeakD", "PeakE", "PeakA", "PeakG")
+#' match_gene_regulator_cluster(rna, atac, cell_types, associationMatrix)
+match_gene_regulator_cluster <- function(rna, atac, cell_types, associationMatrix){
+  clusters <- unique(associationMatrix$Gene_cluster)
+  
+  # remove cluster 0 since these are the unorganized.
+  clusters <- clusters[clusters != 0 & !is.na(clusters)]
+  
+  for (e in clusters){
+    print(e)
+    # Make mini association lists of each cluster and reorganize them
+    miniAsoc <- associationMatrix %>%
+      dplyr::filter((Gene_cluster == e & (Peak_cluster == e | is.na(Peak_cluster))) |
+                      (Peak_cluster == e & (Gene_cluster == e | is.na(Gene_cluster))))
+    
+    miniATAC <- atac[row.names(atac) %in% as.character(na.omit(miniAsoc$Peak_ID)), ]
+    
+    associationList <- na.omit(miniAsoc[, c("Gene_ID", "Peak_ID")])
+    
+    miniRNA <- rna[row.names(rna) %in% as.character(associationList$Gene_ID), ]
+    
+    res <- match_gene_regulator(miniRNA, miniATAC, cell_types, associationList)
+    
+    ## Update RNA and ATAC dataframes with the changes we have made
+    atac <- as.data.frame(as.matrix(atac)) %>%
+      tibble::rownames_to_column() %>%
+      dplyr::rows_update(res$atac %>% tibble::rownames_to_column(), by = "rowname") %>%
+      tibble::column_to_rownames()
+    
+    rna <- as.data.frame(as.matrix(rna)) %>%
+      tibble::rownames_to_column() %>%
+      dplyr::rows_update(res$rna %>% tibble::rownames_to_column(), by = "rowname") %>%
+      tibble::column_to_rownames()
+    
+  }
+  return(list("atac" = atac, "rna" = rna))
+}
+
+
+

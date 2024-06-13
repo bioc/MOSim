@@ -7,7 +7,7 @@
 check_patterns(patterns)
 }
 \arguments{
-\item{patterns_ret}{tibble of TRUE FALSE values}
+\item{patterns}{tibble of TRUE FALSE values}
 }
 \value{
 list of indices where the rows are opposite

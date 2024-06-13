@@ -103,6 +103,6 @@ Performs multiomic simulation of single cell datasets
 omic_list <- sc_omicData(list("scRNA-seq"))
 cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
 'Memory_B' = c(31:40))
-sim <- scMOSim(omic_list, cell_types)
+sim <- scMOSim(omic_list, cell_types, regulatorEffect = list(c(0.1, 0.2)))
 
 }

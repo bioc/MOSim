@@ -3,7 +3,7 @@
 #' Function to check if the TRUE FALSE patterns have at least two rows that are
 #' opposite, we need this to be able to generate repressor regulators
 #'
-#' @param patterns_ret tibble of TRUE FALSE values
+#' @param patterns tibble of TRUE FALSE values
 #' @export
 #' @return list of indices where the rows are opposite
 #'
@@ -394,15 +394,15 @@ make_association_dataframe <- function(group, genereggroup){
   # Concat dataframes of DE genes and features
   df <- rbind(df1, df2, df3, df4, df5)
   ## Now I have to figure out how to repartir the rest of genes and features in the cluster groups and whichever ones dont fit, put cluster 0
-  clRNA <- as.data.frame(length(genereggroup$`Clusters_scRNA-seq`[[1]]) - table(Gene_cluster[Gene_cluster != 0]))
+  clRNA <- as.data.frame(lengths(genereggroup$`Clusters_scRNA-seq`) - table(Gene_cluster[Gene_cluster != 0]))
   
-  clATAC <- as.data.frame(length(genereggroup$`Clusters_scATAC-seq`[[1]]) - table(Peak_cluster[Peak_cluster != 0]))
+  clATAC <- as.data.frame(lengths(genereggroup$`Clusters_scATAC-seq`) - table(Peak_cluster[Peak_cluster != 0]))
   lRNA <- list()
   lATAC <- list()
   # Generate a vector of numbers of clusters with the missing values to be able to fill it
   for (e in 1:length(clRNA[[1]])){
     ## Some times this line gives me a size error, but I can-t reproduce it
-    lRNA[[e]] <- rep(clRNA[e, ][[1]], as.numeric(clRNA[e, ][[2]]))
+    lRNA[[e]] <- rep(clRNA[e, ][[1]], abs(as.numeric(clRNA[e, ][[2]])))
   }
   
   clus <- setdiff(c(1:length(genereggroup$`Clusters_scRNA-seq`)), unique(Gene_cluster))
@@ -412,7 +412,7 @@ make_association_dataframe <- function(group, genereggroup){
   lRNA <- as.numeric(as.vector(unlist(lRNA)))
 
   for (e in 1:length(clATAC[[1]])){
-    lATAC[[e]] <- rep(clATAC[e, ][[1]], as.numeric(clATAC[e, ][[2]]))
+    lATAC[[e]] <- rep(clATAC[e, ][[1]], abs(as.numeric(clATAC[e, ][[2]])))
   }
   clus <- setdiff(c(1:length(genereggroup$`Clusters_scATAC-seq`)), unique(Peak_cluster))
   lATAC[["clus"]] <- rep(clus, each = length(genereggroup$`Clusters_scATAC-seq`[[1]]))
@@ -584,14 +584,16 @@ calculate_mean_per_list_df <- function(df, named_lists) {
 #' match_gene_regulator(rna, atac, cell_types, associationList)
 match_gene_regulator <- function(rna, atac, cell_types, associationList){
   ## Prepare the dataframes:
+  Gene_ID <- NULL
+  dup_index <- NULL
   
   # Add a suffix to each duplicate occurrence in associationList
   associationList <- associationList %>%
-    group_by(Gene_ID) %>%
-    mutate(dup_index = row_number() - 1,
+    dplyr::group_by(Gene_ID) %>%
+    dplyr::mutate(dup_index = row_number() - 1,
            Gene_ID = ifelse(dup_index > 0, paste0(Gene_ID, "_dup", dup_index), Gene_ID)) %>%
-    select(-dup_index) %>%
-    ungroup()
+    dplyr::select(-dup_index) %>%
+    dplyr::ungroup()
   
   # Check for duplicates in Gene_ID column
   duplicate_genes <- associationList$Gene_ID[grepl("_dup", associationList$Gene_ID)]
@@ -721,7 +723,7 @@ match_gene_regulator <- function(rna, atac, cell_types, associationList){
 #' @export
 #'
 #' @examples
-#' #' rna <- data.frame(c1 = c(1.5, 15.5, 3.5, 20.5), c2 = c(2, 15, 4, 20), 
+#' rna <- data.frame(c1 = c(1.5, 15.5, 3.5, 20.5), c2 = c(2, 15, 4, 20), 
 #'         c3 = c(10, 1, 12, 13), c4 = c(11, 1, 13, 14), c5 = c(7, 0, 0, 0), 
 #'         c6 = c(8, 1, 1, 1), c7 = c(8, 1, 1, 1))
 #' rownames(rna) <- c('GenB', 'GenA', 'GenC', 'GenD')
@@ -734,8 +736,11 @@ match_gene_regulator <- function(rna, atac, cell_types, associationList){
 #'         c5 = c(0, 0, 0, 7, 1, 6, 6), c6 = c(1, 1, 1, 8, 0, 5, 8), 
 #'         c7 = c(1, 1, 1, 8, 1, 5, 7))
 #' rownames(atac) <- c('PeakB', "PeakC", "PeakF", "PeakD", "PeakE", "PeakA", "PeakG")
-#' match_gene_regulator_cluster(rna, atac, cell_types, associationMatrix)
+#' match_gene_regulator_cluster(rna, atac, cell_types, associationList)
 match_gene_regulator_cluster <- function(rna, atac, cell_types, associationMatrix){
+  Gene_cluster <- NULL
+  Peak_cluster <- NULL
+  
   clusters <- unique(associationMatrix$Gene_cluster)
   
   # remove cluster 0 since these are the unorganized.
@@ -747,9 +752,9 @@ match_gene_regulator_cluster <- function(rna, atac, cell_types, associationMatri
       dplyr::filter((Gene_cluster == e & (Peak_cluster == e | is.na(Peak_cluster))) |
                       (Peak_cluster == e & (Gene_cluster == e | is.na(Gene_cluster))))
     
-    miniATAC <- atac[row.names(atac) %in% as.character(na.omit(miniAsoc$Peak_ID)), ]
+    miniATAC <- atac[row.names(atac) %in% as.character(stats::na.omit(miniAsoc$Peak_ID)), ]
     
-    associationList <- na.omit(miniAsoc[, c("Gene_ID", "Peak_ID")])
+    associationList <- stats::na.omit(miniAsoc[, c("Gene_ID", "Peak_ID")])
     
     miniRNA <- rna[row.names(rna) %in% as.character(associationList$Gene_ID), ]
     

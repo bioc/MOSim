@@ -173,22 +173,6 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
     }
   }
   
-  
-  # Normalize using scran method, we had to suppress warnings because
-  # ATAC has too many zeroes for the normalization to be super comfortable
-  norm <- function(om) {
-    o <- SingleCellExperiment::SingleCellExperiment(assays=list(counts=as.matrix(om)))
-    o <- suppressWarnings(scran::computeSumFactors(o, sizes = seq(20, 100, 5),
-                                                     positive = FALSE))
-    # Apply normalization factors
-    o <- scater::normalizeCounts(o, log = FALSE)
-    o[is.na(o)] <- 0
-    o[!is.finite(o)] <- 0
-    o <- abs(o)
-
-    return(o)
-  }
-  
   ## Make association dataframe
   if (N_omics > 1){
     prov <- MOSim::make_association_dataframe(group, genereggroup)
@@ -224,7 +208,20 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
                                       rep("NE", length(dfGeneNames) - length(genereggroup[[paste0("GeneExtraUp_G", group)]]) - length(genereggroup[[paste0("GeneExtraDown_G", group)]])))
   }
   
-  
+  # Normalize using scran method, we had to suppress warnings because
+  # ATAC has too many zeroes for the normalization to be super comfortable
+  norm <- function(om) {
+    o <- SingleCellExperiment::SingleCellExperiment(assays=list(counts=as.matrix(om)))
+    o <- suppressWarnings(scran::computeSumFactors(o, sizes = seq(20, 100, 5),
+                                                   positive = FALSE))
+    # Apply normalization factors
+    o <- scater::normalizeCounts(o, log = FALSE)
+    o[is.na(o)] <- 0
+    o[!is.finite(o)] <- 0
+    o <- abs(o)
+    
+    return(o)
+  }
   
   norm_list <- lapply(omics, norm)
   param_est_list <- list()
@@ -280,7 +277,7 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
     for(i in 1:N_omics){
       message(paste0("Estimating distribution from original data type: ", i))
       param_est <- MOSim::sparsim_estimate_parameter_from_data(raw_data = omics[[i]],
-                                                               norm_data = omics[[i]],
+                                                               norm_data = norm_list[[i]],
                                                                conditions = cellTypes)
       param_est_list[[paste0("param_est_", names(omics)[i])]] <- param_est
       
@@ -290,11 +287,11 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
     VARlist <- list()
     
     for(i in 1:N_omics){
-      FCvec <- rep(1, dim(associationMatrix)[[1]])
+      FCvec <- rep(1, dim(omics[[i]])[[1]])
       FClist[[paste0("FC_", names(omics)[i])]] <- FCvec
       
       # Same for variability
-      VARvec <- rep(1, dim(associationMatrix)[[1]])
+      VARvec <- rep(1, dim(omics[[i]])[[1]])
       VARlist[[paste0("Var_", names(omics)[i])]] <- VARvec
       
       dfPeakNames <- NA
@@ -407,7 +404,7 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
 #' omic_list <- sc_omicData(list("scRNA-seq"))
 #' cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
 #' 'Memory_B' = c(31:40))
-#' sim <- scMOSim(omic_list, cell_types)
+#' sim <- scMOSim(omic_list, cell_types, regulatorEffect = list(c(0.1, 0.2)))
 #'
 scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1, 
                     diffGenes = NULL, minFC = 0.25, maxFC = 4,
@@ -470,6 +467,13 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
     stop("You requested a simulation of scATAC-seq data but did not provide information for variable <regulatorEffect>")
   }
   
+  if (numberGroups > 0 && identical(names(omics[2]), "scATAC-seq")){
+    if (is.null(regulatorEffect) || length(regulatorEffect) != (numberGroups)){
+      stop(paste0("Number of elements in regulatorEffect must have a length equal to",
+                  " numberGroups"))
+    }
+  }
+  
   ## Message the experimental dessign
   message(paste0("The experimental design includes: 
                  - ", numberReps, " Biological replicates
@@ -486,7 +490,7 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
   genereggroup <- list()
   
   if (length(omics) > 1){
-    for (i in seq_along(numberGroups)){
+    for (i in 1:numberGroups){
       if (regulatorEffect[[i]][1] < 1) {
         # If relative, make absolute numbers
         numActivator <- round(regulatorEffect[[i]][1]*numfeat, digits = 0)
@@ -505,8 +509,8 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
       numActivator <- sample(associationList$Peak_ID, numActivator)
       numRepressor <- sample(setdiff(associationList$Peak_ID, numActivator), numRepressor)
       
-      # If more than one group
-      if (numberGroups > 1){
+      # If group 2 onwards
+      if (i > 1){
         ## Get activated, repressed and other diffexp for genes
         if (diffGenes[[i -1]][1] < 1) {
           numup <- round(diffGenes[[i -1]][1]*nrow(omics[[1]]), digits = 0)
@@ -519,6 +523,7 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
                     is bigger than the number of total genes: ", nrow(omics[[1]])))
           }
         }
+        
         
         # Get the genes corresponding to the activator regulators and repressors
         genesActivated <- associationList[associationList$Peak_ID %in% numActivator, ]
@@ -824,8 +829,8 @@ scOmicSettings <- function(sim, TF = FALSE){
           gene_id <- TFtoGene$Gene_ID[i]
           target_id <- TFtoGene$Target_ID[i]
           
-          gene_cluster_id <- na.omit(mat$Gene_cluster[mat$Gene_ID == gene_id])
-          target_cluster_id <- na.omit(mat$Gene_cluster[mat$Gene_ID == target_id])
+          gene_cluster_id <- stats::na.omit(mat$Gene_cluster[mat$Gene_ID == gene_id])
+          target_cluster_id <- stats::na.omit(mat$Gene_cluster[mat$Gene_ID == target_id])
           
           # If a matching Cluster_ID is found, add it to dataframe C
           if (gene_cluster_id[1] > 0 && target_cluster_id[1] > 0) {

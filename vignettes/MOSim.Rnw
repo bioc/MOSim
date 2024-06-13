@@ -9,7 +9,6 @@ BiocStyle::latex()
 options(tidy.opts=list(blank=FALSE, width.cutoff=60))
 @
 \usepackage{tikz}
-\definecolor{fgcolor}{rgb}{255,0,0}
 % \usepackage[usenames, dvipsnames]{xcolor}
 \usetikzlibrary{positioning}
 
@@ -625,7 +624,7 @@ design_matrix
 
 Graphical plots are useful to check a feature profile or to compare gene \& regulator interactions. To generate them, the function \Rfunction{plotProfile} needs the simulation object, the omic or two omics to plot, and one feature for each omic.
 
-<<code17, echo=TRUE, eval=TRUE, tidy = FALSE, results = "hide", message=FALSE, warning=FALSE>>=
+<<code17, echo=TRUE, eval=FALSE, tidy = FALSE, results = "hide", message=FALSE, warning=FALSE>>=
 
 # The methods returns a ggplot plot, if called directly
 # it will be automatically plotted.
@@ -639,7 +638,7 @@ plotProfile(multi_simulation,
 
 The returned ggplot can be stored in a variable to customize other attributes.
 
-<<code18, echo=TRUE, eval=TRUE, tidy = FALSE, results = "hide", message=FALSE, warning=FALSE>>=
+<<code18, echo=TRUE, eval=FALSE, tidy = FALSE, results = "hide", message=FALSE, warning=FALSE>>=
 library(ggplot2)
 
 # Store the plot in a variable

@@ -19,7 +19,7 @@ match_gene_regulator_cluster(rna, atac, cell_types, associationMatrix)
 match_gene_regulator_cluster
 }
 \examples{
-#' rna <- data.frame(c1 = c(1.5, 15.5, 3.5, 20.5), c2 = c(2, 15, 4, 20), 
+rna <- data.frame(c1 = c(1.5, 15.5, 3.5, 20.5), c2 = c(2, 15, 4, 20), 
         c3 = c(10, 1, 12, 13), c4 = c(11, 1, 13, 14), c5 = c(7, 0, 0, 0), 
         c6 = c(8, 1, 1, 1), c7 = c(8, 1, 1, 1))
 rownames(rna) <- c('GenB', 'GenA', 'GenC', 'GenD')
@@ -32,5 +32,5 @@ atac <- data.frame(c1 = c(3,20, 1,15, 1, 7, 1), c2 = c(4,20, 2,15, 0, 5, 1.5),
         c5 = c(0, 0, 0, 7, 1, 6, 6), c6 = c(1, 1, 1, 8, 0, 5, 8), 
         c7 = c(1, 1, 1, 8, 1, 5, 7))
 rownames(atac) <- c('PeakB', "PeakC", "PeakF", "PeakD", "PeakE", "PeakA", "PeakG")
-match_gene_regulator_cluster(rna, atac, cell_types, associationMatrix)
+match_gene_regulator_cluster(rna, atac, cell_types, associationList)
 }

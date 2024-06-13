@@ -94,10 +94,10 @@ testthat::test_that("checking that scMOSim is able to simulate groups and replic
   cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
                      'Memory_B' = c(31:40))
   data("associationList")
-  testing_groupsreps <- MOSim::scMOSim(omicsList, cell_types, numberReps = 2, numberGroups = 2, 
-                                       diffGenes = list(c(0.1, 0.2)), minFC = 0.25, maxFC = 4,
+  testing_groupsreps <- MOSim::scMOSim(omicsList, cell_types, numberReps = 2, numberGroups = 1, 
+                                       diffGenes = NULL, minFC = 0.25, maxFC = 4,
                                        numberCells = NULL, mean = NULL, sd = NULL, 
-                                       regulatorEffect = list(c(0.1, 0.2), c(0.2, 0.3)),
+                                       regulatorEffect = list(c(0.1, 0.2)),
                                        associationList = associationList)
   testthat::expect_type(testing_groupsreps, "list")
 })

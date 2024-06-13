@@ -616,8 +616,8 @@ match_gene_regulator <- function(rna, atac, cell_types, associationList){
   rna <- rna[order(match(rownames(rna), as.vector(associationList$Gene_ID))), , drop = FALSE]
   atac <- atac[order(match(rownames(atac), as.vector(associationList$Peak_ID))), , drop = FALSE]
   
-  mean_rna <- calculate_mean_per_list_df(rna, cell_types)
-  mean_atac <- calculate_mean_per_list_df(atac, cell_types)
+  mean_rna <- MOSim::calculate_mean_per_list_df(rna, cell_types)
+  mean_atac <- MOSim::calculate_mean_per_list_df(atac, cell_types)
   
   # Target values
   target_values <- as.numeric(as.data.frame(mean_rna)[[1]])
@@ -742,7 +742,6 @@ match_gene_regulator_cluster <- function(rna, atac, cell_types, associationMatri
   clusters <- clusters[clusters != 0 & !is.na(clusters)]
   
   for (e in clusters){
-    print(e)
     # Make mini association lists of each cluster and reorganize them
     miniAsoc <- associationMatrix %>%
       dplyr::filter((Gene_cluster == e & (Peak_cluster == e | is.na(Peak_cluster))) |
@@ -754,7 +753,7 @@ match_gene_regulator_cluster <- function(rna, atac, cell_types, associationMatri
     
     miniRNA <- rna[row.names(rna) %in% as.character(associationList$Gene_ID), ]
     
-    res <- match_gene_regulator(miniRNA, miniATAC, cell_types, associationList)
+    res <- MOSim::match_gene_regulator(miniRNA, miniATAC, cell_types, associationList)
     
     ## Update RNA and ATAC dataframes with the changes we have made
     atac <- as.data.frame(as.matrix(atac)) %>%

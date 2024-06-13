@@ -4,7 +4,7 @@
 \alias{check_patterns}
 \title{check_patterns}
 \usage{
-check_patterns(patterns_ret)
+check_patterns(patterns)
 }
 \arguments{
 \item{patterns_ret}{tibble of TRUE FALSE values}

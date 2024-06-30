@@ -152,33 +152,20 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
   
   N_omics <- length(omics)
   
-  # Add variability to groups in comparison to group 1
-  VARlist <- list()
-  if (group > 1) {
-    for (e in 1:N_omics){
-      VARlist[[paste0("Var_", names(omics)[e])]] <- data.frame(matrix(0, 
-          ncol = length(colnames(omics[[e]])), nrow = length(rownames(omics[[e]]))))
-      var_group <- stats::rnorm(nrow(as.data.frame(omics[[e]])), 0, noiseGroup)
-      # Add variability to each omic compared to group 1
-      # transform the matrix into TRUE when > 0 false when 0
-      sim_trueFalse <- (omics[[e]] > 0)
-      # Multiply the variability vector by a 1/0 to keep the zeros.
-      for (c in 1:length(colnames(omics[[e]]))){
-        sim_trueFalse[, c] <- as.integer(as.logical(sim_trueFalse[,c]))
-        omics[[e]][,c] <- omics[[e]][,c] + (sim_trueFalse[, c] * var_group)
-        VARlist[[paste0("Var_", names(omics)[e])]][, c] <- (sim_trueFalse[, c] * var_group)
-        
-      }
-      omics[[e]] <- abs(omics[[e]])
-    }
-  }
-  
   ## Make association dataframe
   if (N_omics > 1){
-    prov <- MOSim::make_association_dataframe(group, genereggroup)
+    
+    prov <- MOSim::make_association_dataframe(group, genereggroup, 
+                                              dim(omics$`scRNA-seq`)[[1]], 
+                                              dim(omics$`scATAC-seq`)[[1]],
+                                              minFC, maxFC)
     associationMatrix <- prov$associationMatrix
-    dfPeakNames <- prov$dfPeakNames
+    
+    rownames(omics[[1]]) <- prov$dfGeneNames
+    rownames(omics[[2]]) <- prov$dfPeakNames
+    
     dfGeneNames <- prov$dfGeneNames
+    dfPeakNames <- prov$dfPeakNames
     
     ## Also improve the association gene-regulator
     res <- MOSim::match_gene_regulator_cluster(omics[[1]], omics[[2]], cellTypes, associationMatrix)
@@ -231,6 +218,7 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
     # if its from group 2 upwards, we make the differences by multiplying
     # Times a fold change vector, thus we generate it
     FClist <- list()
+    VARlist <- list()
     
     #We cant move this out of the function because it takes the variability
     # of the group into account
@@ -241,35 +229,24 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
                                                                conditions = cellTypes)
       param_est_list[[paste0("param_est_", names(omics)[i])]] <- param_est
       
+      
+      #### Make the variability vector
+      VARlist[[paste0("Var_", names(omics)[i])]] <- data.frame(matrix(0, 
+             ncol = length(colnames(omics[[i]])), nrow = length(rownames(omics[[i]]))))
+      var_group <- stats::rnorm(nrow(as.data.frame(omics[[i]])), 0, noiseGroup)
+      # Add variability to each omic compared to group 1
+      # transform the matrix into TRUE when > 0 false when 0
+      sim_trueFalse <- (omics[[i]] > 0)
+      # Multiply the variability vector by a 1/0 to keep the zeros.
+      for (c in 1:length(colnames(omics[[i]]))){
+        sim_trueFalse[, c] <- as.integer(as.logical(sim_trueFalse[,c]))
+        omics[[i]][,c] <- omics[[i]][,c] + (sim_trueFalse[, c] * var_group)
+        VARlist[[paste0("Var_", names(omics)[i])]][, c] <- (sim_trueFalse[, c] * var_group)
+          
+      }
+      omics[[i]] <- abs(omics[[i]])
+      
     }
-  
-    for(i in 1:N_omics){ ## Loop for differentially expressed genes
-      if (identical(names(omics[i]), "scRNA-seq")){
-        up <- length(associationMatrix[associationMatrix$Gene_DE %in% "Up",][[1]])
-        down <- length(associationMatrix[associationMatrix$Gene_DE %in% "Down",][[1]])
-      } else {
-        up <- length(associationMatrix[associationMatrix$Peak_DE %in% "Up",][[1]])
-        down <- length(associationMatrix[associationMatrix$Peak_DE %in% "Down",][[1]])
-      }
-      NE <- length(param_est_list[[i]][[1]][[1]]) - up - down
-      message(paste0("Up: ", up, " Down: ", down, " NE: ", NE))
-      
-      # Now we make the FC vector
-      notDE_FCvec <- runif(n = NE, min = minFC + 0.001, max = maxFC - 0.001)
-      Up_FCvec <- runif(n = up, min = maxFC, max = 100)
-      Down_FCvec <- runif(n = down, min = 0.0001, max = minFC)
-      
-      ## Here I have 
-      
-      # The genes affected by FC will be at the begining (also these were
-      # The ones most probably included into co-expression patterns)
-      
-      if (identical(names(omics)[i], "scRNA-seq")){
-        FClist[[paste0("FC_est_", names(omics)[i])]] <- order_FC_forMatrix(associationMatrix$Gene_DE, Up_FCvec, Down_FCvec, notDE_FCvec)
-      } else {
-        FClist[[paste0("FC_est_", names(omics)[i])]] <- order_FC_forMatrix(associationMatrix$Peak_DE, Up_FCvec, Down_FCvec, notDE_FCvec)
-      }
-    } 
   } else if (group == 1){
     # If its the first group, we dont need to add FC, so we multiply by one
     # Instead of a fold change vector
@@ -287,19 +264,9 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
     VARlist <- list()
     
     for(i in 1:N_omics){
-      FCvec <- rep(1, dim(omics[[i]])[[1]])
-      FClist[[paste0("FC_", names(omics)[i])]] <- FCvec
-      
-      # Same for variability
+      # Dont add variability for first group
       VARvec <- rep(1, dim(omics[[i]])[[1]])
       VARlist[[paste0("Var_", names(omics)[i])]] <- VARvec
-      
-      dfPeakNames <- NA
-      if (identical(names(omics[i]), "scRNA-seq")){
-        dfGeneNames <- rownames(omics[[i]])
-      } else {
-        dfPeakNames <- rownames(omics[[i]])
-      }
     }
   }
 
@@ -310,6 +277,12 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
   for(i in 1:N_param_est_list){
     cell_type_list <- list()
     message(paste0("Creating parameters for omic: ", i))
+    
+    if (identical(names(omics)[i], "scRNA-seq")){
+      FClist[[paste0("FC_est_", names(omics)[i])]] <- as.numeric(na.omit(associationMatrix$Gene_FC))
+    } else {
+      FClist[[paste0("FC_est_", names(omics)[i])]] <- as.numeric(na.omit(associationMatrix$Peak_FC))
+    }
     
     for(j in 1:N_cellTypes){
       message(paste0("Creating parameters for cell type: ", j))
@@ -538,7 +511,7 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
         availGenes <- setdiff(availGenes, genesUp)
         genesDown <- sample(availGenes, d)
         
-        remaining <-  setdiff(rownames(omics[[1]]), genesActivated[[2]])
+        remaining <- setdiff(rownames(omics[[1]]), genesActivated[[2]])
         remaining <- setdiff(remaining, genesRepressed[[2]])
         remaining <- setdiff(remaining, genesUp)
         remaining <- setdiff(remaining, genesDown)
@@ -714,13 +687,6 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
         
         assay_name <- str_split(names(sim_list)[i], "-")[[1]][1]
         assay_name <- sub("sim_sc","",assay_name)
-        
-        # Rename the 
-        if(identical(names(sim_list[[i]]), "sim_scRNA-seq")){
-          newNammes <- param_l$dfGeneNames
-        } else{
-          newNames <- param_l$dfPeakNames
-        }
         
         options(Seurat.object.assay.version = "v3")
         seu <- Seurat::CreateAssayObject(counts = sim_list[[i]],

@@ -4,7 +4,14 @@
 \alias{make_association_dataframe}
 \title{make_association_dataframe}
 \usage{
-make_association_dataframe(group, genereggroup)
+make_association_dataframe(
+  group,
+  genereggroup,
+  numtotalgenes,
+  numtotalpeaks,
+  minFC,
+  maxFC
+)
 }
 \arguments{
 \item{group}{Group from which we are generating the association dataframe}
@@ -12,6 +19,14 @@ make_association_dataframe(group, genereggroup)
 \item{genereggroup}{list of elements to generate the association dataframe
 such as clusters of each omic, indices of opposite clusters, which
 genes are activated, repressed, behavior of the features etc.}
+
+\item{numtotalgenes}{total number of genes}
+
+\item{numtotalpeaks}{total number of peaks}
+
+\item{minFC}{FC below which is downregulated}
+
+\item{maxFC}{FC above which is upregulated}
 }
 \value{
 a dataframe with all the information the user needs about each gene

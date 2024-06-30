@@ -293,238 +293,218 @@ shuffle_group_matrix <- function(sim_data, feature_ids, group_pattern, ngroups) 
 #' @param genereggroup list of elements to generate the association dataframe
 #'      such as clusters of each omic, indices of opposite clusters, which
 #'      genes are activated, repressed, behavior of the features etc.
+#' @param numtotalgenes total number of genes
+#' @param numtotalpeaks total number of peaks
+#' @param minFC FC below which is downregulated
+#' @param maxFC FC above which is upregulated
 #' @return a dataframe with all the information the user needs about each gene
 #'      and the order of gene and peak names to rename them in the simulated
 #'      datasets of the group
 #' @export
 #'
-make_association_dataframe <- function(group, genereggroup){
+make_association_dataframe <- function(group, genereggroup, numtotalgenes, 
+                                       numtotalpeaks, minFC, maxFC){
   # Start from the association list, now we have two columns Peak_ID and Gene_ID
   
   columns <- c("Gene_ID", "Peak_ID", "RegulatorEffect", "Gene_cluster", "Peak_cluster", 
-               "Gene_DE", "Peak_DE")
+               "Gene_DE", "Peak_DE", "Gene_FC", "Peak_FC")
+  keep_remaining <- function(ori_clus, clus){
+    clusters_a <- as.data.frame(lengths(ori_clus))
+    clusters_a$cluster <- rownames(clusters_a)
+    colnames(clusters_a) <- c("Freq", "cluster")
+    clusters_ao <- as.data.frame(table(clus))
+    colnames(clusters_ao) <- c("cluster", "Freq")
+    clusters_a <- clusters_a[colnames(clusters_ao)]
+    result <- clusters_a %>%
+      left_join(clusters_ao, by = "cluster", suffix = c(".a", ".ao")) %>%
+      mutate(Freq = Freq.a - ifelse(is.na(Freq.ao), 0, Freq.ao)) %>%
+      select(cluster, Freq)
+    
+    return(result)
+  }
+  
+  keep_remaining2 <- function(ori_clus, clus){
+    clusters_a <- as.data.frame(ori_clus)
+    clusters_ao <- as.data.frame(table(clus))
+    colnames(clusters_ao) <- c("cluster", "Freq")
+    clusters_a <- clusters_a[colnames(clusters_ao)]
+    result <- clusters_a %>%
+      left_join(clusters_ao, by = "cluster", suffix = c(".a", ".ao")) %>%
+      mutate(Freq = Freq.a - ifelse(is.na(Freq.ao), 0, Freq.ao)) %>%
+      select(cluster, Freq)
+    
+    return(result)
+  }
+  
+  ## Make the repressed
+  df2 <- data.frame(matrix(nrow = length(genereggroup[[paste0("GeneRepressed_G", 
+                                                              group)]]$Gene_ID), ncol = length(columns)))
+  colnames(df2) <- columns
+  df2$Gene_ID <- genereggroup[[paste0("GeneRepressed_G", group)]]$Gene_ID
+  df2$Peak_ID <- genereggroup[[paste0("GeneRepressed_G", group)]]$Peak_ID
+  df2$RegulatorEffect <- rep("Repressor", length(df2[[1]]))
+  Gene_cluster <- sample(unique(unlist(genereggroup$opposite_indices)), 
+                          length(df2[[1]]), replace = TRUE)
+  df2$Gene_cluster = Gene_cluster
+  lookup <- unlist(lapply(genereggroup$opposite_indices, function(x) setNames(rev(x), x)))
+  Peak_cluster <- as.numeric(sapply(Gene_cluster, function(x) lookup[as.character(x)]))
+  df2$Peak_cluster <- Peak_cluster
+  df2$Gene_DE <- rep("Down", length(df2[[1]]))
+  df2$Peak_DE <- rep("Up", length(df2[[1]]))
+  
+  if (group > 1){
+    df2$Gene_FC <- runif(n = length(df2[[1]]), min = 0.0001, max = minFC)
+    df2$Peak_FC <- runif(n = length(df2[[1]]), min = maxFC, max = 100)
+  }
+  
+  remaining_rna <- keep_remaining(genereggroup$`Clusters_scRNA-seq`, Gene_cluster)
+  remaining_atac <- keep_remaining(genereggroup$`Clusters_scATAC-seq`, Peak_cluster)
+  
+  remaining_r <- as.numeric(rep(remaining_rna$cluster, remaining_rna$Freq))
+
+  # Make the activated
   
   df1 <- data.frame(matrix(nrow = length(genereggroup[[paste0("GeneActivated_G", 
                                     group)]]$Gene_ID), ncol = length(columns)))
   colnames(df1) <- columns
   
-  df1["Gene_ID"] <- genereggroup[[paste0("GeneActivated_G", group)]]$Gene_ID
-  df1["Peak_ID"] <- genereggroup[[paste0("GeneActivated_G", group)]]$Peak_ID
-  df1["RegulatorEffect"] <- rep("Activator", length(df1[[1]]))
-  Gene_cluster <- sample(1:length(genereggroup$`Clusters_scRNA-seq`), 
-                         length(df1[[1]]), replace = TRUE)
+  df1$Gene_ID <- genereggroup[[paste0("GeneActivated_G", group)]]$Gene_ID
+  df1$Peak_ID <- genereggroup[[paste0("GeneActivated_G", group)]]$Peak_ID
+  df1$RegulatorEffect <- rep("Activator", length(df1[[1]]))
+  Gene_cluster <- sample(remaining_r, 
+                         length(df1[[1]]), replace = FALSE)
   Peak_cluster <- Gene_cluster
-  df1["Gene_DE"] <- rep("Up", length(df1[[1]]))
-  df1["Peak_DE"] <- rep("Up", length(df1[[1]]))
+  df1$Gene_cluster <- Gene_cluster
+  df1$Peak_cluster <- Peak_cluster
+  df1$Gene_DE <- rep("Up", length(df1[[1]]))
+  df1$Peak_DE <- rep("Up", length(df1[[1]]))
   
+  if (group > 1){
+    df1$Gene_FC <- runif(n = length(df1[[1]]), min = maxFC, max = 100)
+    df1$Peak_FC <- df1$Gene_FC
+  }
   
-  df2 <- data.frame(matrix(nrow = length(genereggroup[[paste0("GeneRepressed_G", 
-                                    group)]]$Gene_ID), ncol = length(columns)))
-  colnames(df2) <- columns
-  df2["Gene_ID"] <- genereggroup[[paste0("GeneRepressed_G", group)]]$Gene_ID
-  df2["Peak_ID"] <- genereggroup[[paste0("GeneRepressed_G", group)]]$Peak_ID
-  df2["RegulatorEffect"] <- rep("Repressor", length(df2[[1]]))
-  Gene_cluster2 <- sample(unique(unlist(genereggroup$opposite_indices)), 
-                          length(df2[[1]]), replace = TRUE)
-  u <- as.data.frame(t(as.data.frame(genereggroup$opposite_indices)))
-  Peak_cluster <- c(Peak_cluster, u[[2]][match(Gene_cluster2, u[[1]])])
-  Gene_cluster <- c(Gene_cluster, Gene_cluster2)
-  df2["Gene_DE"] <- rep("Down", length(df2[[1]]))
-  df2["Peak_DE"] <- rep("Up", length(df2[[1]]))
+  remaining_rna <- keep_remaining2(remaining_rna, Gene_cluster)
+  remaining_atac <- keep_remaining2(remaining_atac, Peak_cluster)
+  
+  remaining_r <- as.numeric(rep(remaining_rna$cluster, remaining_rna$Freq))
+  remaining_a <- as.numeric(rep(remaining_atac$cluster, remaining_rna$Freq))
+  
+
+  ## Add extras
   
   df3 <- data.frame(matrix(nrow = length(c(genereggroup[[paste0("GeneExtraUp_G", 
                     group)]], rep(NA, length(genereggroup[[paste0("FeatExtraUp_G", 
                     group)]])))), ncol = length(columns)))
   colnames(df3) <- columns
-  df3["Gene_ID"] <- c(genereggroup[[paste0("GeneExtraUp_G", group)]], 
+  df3$Gene_ID <- c(genereggroup[[paste0("GeneExtraUp_G", group)]], 
                       rep(NA, length(genereggroup[[paste0("FeatExtraUp_G", group)]])))
-  df3["Peak_ID"] <- c(rep(NA, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
+  df3$Peak_ID <- c(rep(NA, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
                       genereggroup[[paste0("FeatExtraUp_G", group)]])
-  df3["RegulatorEffect"] <- rep("NE", length(df3[[1]]))
-  Gene_clusterNA <- c(rep(1, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
+  df3$RegulatorEffect <- rep("NE", length(df3[[1]]))
+  df3$Gene_cluster <- c(rep(0, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
                       rep(NA, length(genereggroup[[paste0("FeatExtraUp_G", group)]])))
-  Peak_clusterNA <- c(rep(NA, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
-                      rep(1, length(genereggroup[[paste0("FeatExtraUp_G", group)]])))
-  df3["Gene_DE"] <- c(rep("Up", length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
+  df3$Peak_cluster <- c(rep(NA, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
+                      rep(0, length(genereggroup[[paste0("FeatExtraUp_G", group)]])))
+  df3$Gene_DE <- c(rep("Up", length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
                       rep(NA, length(genereggroup[[paste0("FeatExtraUp_G", group)]])))
-  df3["Peak_DE"] <- c(rep(NA, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
+  df3$Peak_DE <- c(rep(NA, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
                       rep("Up", length(genereggroup[[paste0("FeatExtraUp_G", group)]])))
+
+  if (group > 1){
+    df3$Gene_FC <- c(runif(n = length(genereggroup[[paste0("GeneExtraUp_G", group)]]), min = maxFC, max = 100),
+                        rep(NA, length(genereggroup[[paste0("FeatExtraUp_G", group)]])))
+    df3$Peak_FC <- c(rep(NA, length(genereggroup[[paste0("GeneExtraUp_G", group)]])), 
+                        runif(n = length(genereggroup[[paste0("FeatExtraUp_G", group)]]), min = maxFC, max = 100))
+  }
+  
+  ## Extra down
   
   df4 <- data.frame(matrix(nrow = length(c(genereggroup[[paste0("GeneExtraDown_G", group)]], 
                                            rep(NA, length(genereggroup[[paste0("FeatExtraDown_G", group)]])))), ncol = length(columns)))
   colnames(df4) <- columns
-  df4["Gene_ID"] <- c(genereggroup[[paste0("GeneExtraDown_G", group)]], 
+  df4$Gene_ID <- c(genereggroup[[paste0("GeneExtraDown_G", group)]], 
                       rep(NA, length(genereggroup[[paste0("FeatExtraDown_G", group)]])))
-  df4["Peak_ID"] <- c(rep(NA, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
+  df4$Peak_ID <- c(rep(NA, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
                       genereggroup[[paste0("FeatExtraDown_G", group)]])
-  df4["RegulatorEffect"] <- rep("NE", length(df4[[1]]))
-  Gene_clusterNA <- c(Gene_clusterNA, 
-                      rep(1, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
+  df4$RegulatorEffect <- rep("NE", length(df4[[1]]))
+  df4$Gene_cluster <- c(rep(0, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
                       rep(NA, length(genereggroup[[paste0("FeatExtraDown_G", group)]])))
-  Peak_clusterNA <- c(Peak_clusterNA, 
-                      rep(NA, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
-                      rep(1, length(genereggroup[[paste0("FeatExtraDown_G", group)]])))
-  df4["Gene_DE"] <- c(rep("Down", length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
+  df4$Peak_cluster <- c(rep(NA, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
+                      rep(0, length(genereggroup[[paste0("FeatExtraDown_G", group)]])))
+  df4$Gene_DE <- c(rep("Down", length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
                       rep(NA, length(genereggroup[[paste0("FeatExtraDown_G", group)]])))
-  df4["Peak_DE"] <- c(rep(NA, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
+  df4$Peak_DE <- c(rep(NA, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
                       rep("Down", length(genereggroup[[paste0("FeatExtraDown_G", group)]])))
+  
+  if (group > 1){
+    df4$Gene_FC <- c(runif(n = length(genereggroup[[paste0("GeneExtraDown_G", group)]]), min = 0.0001, max = minFC),
+                        rep(NA, length(genereggroup[[paste0("FeatExtraDown_G", group)]])))
+    df4$Peak_FC <- c(rep(NA, length(genereggroup[[paste0("GeneExtraDown_G", group)]])), 
+                        runif(n = length(genereggroup[[paste0("FeatExtraDown_G", group)]]), min = 0.0001, max = minFC))
+  }
+  
+  ## All remaining
   
   df5 <- data.frame(matrix(nrow = length(c(genereggroup[[paste0("GeneRemaining_G", group)]], 
                                     rep(NA, length(genereggroup[[paste0("FeatRemaining_G", group)]])))), 
                            ncol = length(columns)))
   colnames(df5) <- columns
-  df5["Gene_ID"] <- c(genereggroup[[paste0("GeneRemaining_G", group)]], 
+  df5$Gene_ID <- c(genereggroup[[paste0("GeneRemaining_G", group)]], 
                       rep(NA, length(genereggroup[[paste0("FeatRemaining_G", group)]])))
-  df5["Peak_ID"] <- c(rep(NA, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
+  df5$Peak_ID <- c(rep(NA, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
                       genereggroup[[paste0("FeatRemaining_G", group)]])
-  df5["RegulatorEffect"] <- rep("NE", length(df5[[1]]))
+  df5$RegulatorEffect <- rep("NE", length(df5[[1]]))
   
-  Gene_clusterNA <- c(Gene_clusterNA, 
-                      rep(1, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
+  df5$Gene_cluster <- c(remaining_r, 
+                      rep(0, length(genereggroup[[paste0("GeneRemaining_G", group)]]) - length(remaining_r)),
                       rep(NA, length(genereggroup[[paste0("FeatRemaining_G", group)]])))
-  Peak_clusterNA <- c(Peak_clusterNA, 
-                      rep(NA, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
-                      rep(1, length(genereggroup[[paste0("FeatRemaining_G", group)]])))
+  df5$Peak_cluster <- c(rep(NA, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
+                      remaining_a, 
+                      rep(0, length(genereggroup[[paste0("FeatRemaining_G", group)]]) - length(remaining_a)))
   
-  df5["Gene_DE"] <- c(rep("NE", length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
+  df5$Gene_DE <- c(rep("NE", length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
                       rep(NA, length(genereggroup[[paste0("FeatRemaining_G", group)]])))
-  df5["Peak_DE"] <- c(rep(NA, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
+  df5$Peak_DE <- c(rep(NA, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
                       rep("NE", length(genereggroup[[paste0("FeatRemaining_G", group)]])))
+  
+  if (group > 1){
+    df5$Gene_FC <- c(rep(1, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
+                        rep(NA, length(genereggroup[[paste0("FeatRemaining_G", group)]])))
+    df5$Peak_FC <- c(rep(NA, length(genereggroup[[paste0("GeneRemaining_G", group)]])), 
+                        rep(1, length(genereggroup[[paste0("FeatRemaining_G", group)]])))
+  }
   
   # Concat dataframes of DE genes and features
   df <- rbind(df1, df2, df3, df4, df5)
-  ## Now I have to figure out how to repartir the rest of genes and features in the cluster groups and whichever ones dont fit, put cluster 0
-  clRNA <- as.data.frame(lengths(genereggroup$`Clusters_scRNA-seq`) - table(Gene_cluster[Gene_cluster != 0]))
   
-  clATAC <- as.data.frame(lengths(genereggroup$`Clusters_scATAC-seq`) - table(Peak_cluster[Peak_cluster != 0]))
-  lRNA <- list()
-  lATAC <- list()
-  # Generate a vector of numbers of clusters with the missing values to be able to fill it
-  for (e in 1:length(clRNA[[1]])){
-    ## Some times this line gives me a size error, but I can-t reproduce it
-    lRNA[[e]] <- rep(clRNA[e, ][[1]], abs(as.numeric(clRNA[e, ][[2]])))
+  if (group == 1){
+    df$Gene_FC <- ifelse(is.na(df$Gene_ID), NA, 1)
+    df$Peak_FC <- ifelse(is.na(df$Peak_ID), NA, 1)
   }
   
-  clus <- setdiff(c(1:length(genereggroup$`Clusters_scRNA-seq`)), unique(Gene_cluster))
-  lRNA[["clus"]] <- rep(clus, each = length(genereggroup$`Clusters_scRNA-seq`[[1]]))
-  lRNA <- lapply(lRNA, as.character)
-  lRNA <- lapply(lRNA, as.integer)
-  lRNA <- as.numeric(as.vector(unlist(lRNA)))
-
-  for (e in 1:length(clATAC[[1]])){
-    lATAC[[e]] <- rep(clATAC[e, ][[1]], abs(as.numeric(clATAC[e, ][[2]])))
+  # Now we need to sort the association dataframe according to the clusters
+  # But cluster 0 should be last
+  custom_sort <- function(x) {
+    ifelse(x == 0, Inf, x)
   }
-  clus <- setdiff(c(1:length(genereggroup$`Clusters_scATAC-seq`)), unique(Peak_cluster))
-  lATAC[["clus"]] <- rep(clus, each = length(genereggroup$`Clusters_scATAC-seq`[[1]]))
-  lATAC <- lapply(lATAC, as.character)
-  lATAC <- lapply(lATAC, as.integer)
-  lATAC <- as.numeric(as.vector(unlist(lATAC)))
+  df <- df[order(custom_sort(df$Gene_cluster)),]
   
-  zeros <- sum(!is.na(Gene_clusterNA)) - length(lRNA)
-  lRNA <- c(lRNA, rep(0, zeros))
-
-  zeros <- sum(!is.na(Peak_clusterNA)) - length(lATAC)
-  lATAC <- c(lATAC, rep(0, abs(zeros)))
+  # Remove duplicated atac peaks
+  df <- df %>%
+        group_by(Peak_ID) %>%
+        filter(!(is.na(Gene_ID) & duplicated(Peak_ID)))
   
-  ## Shuffle the values so they are not sorted by number of the cluster
-  lRNA <- sample(lRNA)
-  lATAC <- sample(lATAC)
+  dfGeneNames <- as.character(na.omit(df$Gene_ID))
   
-  positions <- which(Gene_clusterNA == 1)
-  Gene_clusterNA[positions] <- lRNA[1:length(positions)]
+  df2 <- df[order(custom_sort(df$Peak_cluster)),]
   
-  positions <- which(Peak_clusterNA == 1)
-  Peak_clusterNA[positions] <- lATAC[1:length(positions)]
   
-  df["Gene_cluster"] <- c(Gene_cluster, Gene_clusterNA)
-  df["Peak_cluster"] <- c(Peak_cluster, Peak_clusterNA)
   
-  ## Finally we sort the dataframe according to the clusters
-  Geneorder <- df[df$Gene_cluster %in% c(1:length(genereggroup$`Clusters_scRNA-seq`)),]
-  dfGeneNames <- rbind(Geneorder[order(Geneorder$Gene_cluster),], 
-                       df[!df$Gene_cluster %in% c(1:length(genereggroup$`Clusters_scRNA-seq`)),])
-  rownames(dfGeneNames) <- 1:nrow(dfGeneNames)
-  dfGeneNames <- dfGeneNames$Gene_ID
-  
-  Peakorder <- df[df$Peak_cluster %in% c(1:length(genereggroup$`Clusters_scATAC-seq`)),]
-  dfPeakNames <- rbind(Peakorder[order(Peakorder$Peak_cluster),], 
-                       df[!df$Peak_cluster %in% c(1:length(genereggroup$`Clusters_scATAC-seq`)),])
-  rownames(dfPeakNames) <- 1:nrow(dfPeakNames)
-  dfPeakNames <- dfPeakNames$Peak_ID
+  dfPeakNames <- unique(as.character(na.omit(df2$Peak_ID)))
   
   return(list("associationMatrix" = df, "dfPeakNames" = dfPeakNames, "dfGeneNames" = dfGeneNames))
   
-}
-
-#' order_FC_forMatrix
-#' 
-#' Function to sort the FC values according to the genes that must be up or 
-#' downregulated
-#'
-#' @param A Vector of c("Up", "Down", "NE) from the Gene or Peak_DE extracted
-#'          from the association matrix
-#' @param B Calculated vector of Up FC values
-#' @param C Calculated vector of Down FC values
-#' @param D Calculated vector of NE FC values
-#'
-#' @export
-#'
-#' @examples
-#' DE <- c("Up", "Up", "Up", "Down", "Down", "NE", "NE", "NE", "NE", NA, NA, NA)
-#' Up_FCvec <- c(1, 1, 1)
-#' Down_FCvec <- c(2, 2)
-#' notDE_FCvec <- c(2, 2, 2, 2)
-#' FC_vec <- order_FC_forMatrix(DE, Up_FCvec, Down_FCvec, notDE_FCvec)
-#' 
-order_FC_forMatrix <- function(A, B, C, D){
-  # Initialize an empty vector to store the result
-  # Remove NAs
-  A<-A[!is.na(A)]
-  
-  result <- vector("character", length(A))
-  
-  # Create counters for each vector
-  counter_B <- 1
-  counter_C <- 1
-  counter_D <- 1
-  
-  # Loop through vector A
-  for (i in seq_along(A)) {
-    if (is.na(A[i])) {
-      # If NA is encountered, skip and continue to the next element
-      next
-    } else if (A[i] == "Up") {
-      # Assign value from vector B to the result
-      result[i] <- B[counter_B]
-      # Increment the counter for vector B
-      counter_B <- counter_B + 1
-      # If we reached the end of vector B, reset the counter
-      if (counter_B > length(B)) {
-        counter_B <- 1
-      }
-    } else if (A[i] == "Down") {
-      # Assign value from vector C to the result
-      result[i] <- C[counter_C]
-      # Increment the counter for vector C
-      counter_C <- counter_C + 1
-      # If we reached the end of vector C, reset the counter
-      if (counter_C > length(C)) {
-        counter_C <- 1
-      }
-    } else if (A[i] == "NE") {
-      # Assign value from vector D to the result
-      result[i] <- D[counter_D]
-      # Increment the counter for vector D
-      counter_D <- counter_D + 1
-      # If we reached the end of vector D, reset the counter
-      if (counter_D > length(D)) {
-        counter_D <- 1
-      }
-    }
-  }
-  
-  # Print the resulting vector
-  return(result)
 }
 
 

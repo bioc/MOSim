@@ -316,10 +316,9 @@ make_association_dataframe <- function(group, genereggroup, numtotalgenes,
     colnames(clusters_ao) <- c("cluster", "Freq")
     clusters_a <- clusters_a[colnames(clusters_ao)]
     result <- clusters_a %>%
-      left_join(clusters_ao, by = "cluster", suffix = c(".a", ".ao")) %>%
-      mutate(Freq = Freq.a - ifelse(is.na(Freq.ao), 0, Freq.ao)) %>%
-      select(cluster, Freq)
-    
+      dplyr::left_join(clusters_ao, by = "cluster", suffix = c(".a", ".ao")) %>%
+      dplyr::mutate(Freq = Freq.a - ifelse(is.na(Freq.ao), 0, Freq.ao)) %>%
+      dplyr::select(cluster, Freq)
     return(result)
   }
   
@@ -329,9 +328,9 @@ make_association_dataframe <- function(group, genereggroup, numtotalgenes,
     colnames(clusters_ao) <- c("cluster", "Freq")
     clusters_a <- clusters_a[colnames(clusters_ao)]
     result <- clusters_a %>%
-      left_join(clusters_ao, by = "cluster", suffix = c(".a", ".ao")) %>%
-      mutate(Freq = Freq.a - ifelse(is.na(Freq.ao), 0, Freq.ao)) %>%
-      select(cluster, Freq)
+      dplyr::left_join(clusters_ao, by = "cluster", suffix = c(".a", ".ao")) %>%
+      dplyr::mutate(Freq = Freq.a - ifelse(is.na(Freq.ao), 0, Freq.ao)) %>%
+      dplyr::select(cluster, Freq)
     
     return(result)
   }
@@ -388,7 +387,7 @@ make_association_dataframe <- function(group, genereggroup, numtotalgenes,
   remaining_atac <- keep_remaining2(remaining_atac, Peak_cluster)
   
   remaining_r <- as.numeric(rep(remaining_rna$cluster, remaining_rna$Freq))
-  remaining_a <- as.numeric(rep(remaining_atac$cluster, remaining_rna$Freq))
+  remaining_a <- as.numeric(rep(remaining_atac$cluster, remaining_atac$Freq))
   
 
   ## Add extras
@@ -495,13 +494,13 @@ make_association_dataframe <- function(group, genereggroup, numtotalgenes,
         group_by(Peak_ID) %>%
         filter(!(is.na(Gene_ID) & duplicated(Peak_ID)))
   
-  dfGeneNames <- as.character(na.omit(df$Gene_ID))
+  dfGeneNames <- as.character(stats::na.omit(df$Gene_ID))
   
   df2 <- df[order(custom_sort(df$Peak_cluster)),]
   
   
   
-  dfPeakNames <- unique(as.character(na.omit(df2$Peak_ID)))
+  dfPeakNames <- unique(as.character(stats::na.omit(df2$Peak_ID)))
   
   return(list("associationMatrix" = df, "dfPeakNames" = dfPeakNames, "dfGeneNames" = dfGeneNames))
   

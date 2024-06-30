@@ -193,6 +193,8 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
     associationMatrix["Gene_DE"] <- c(rep("Up", length(genereggroup[[paste0("GeneExtraUp_G", group)]])),
                                       rep("Down", length(genereggroup[[paste0("GeneExtraDown_G", group)]])),
                                       rep("NE", length(dfGeneNames) - length(genereggroup[[paste0("GeneExtraUp_G", group)]]) - length(genereggroup[[paste0("GeneExtraDown_G", group)]])))
+    associationMatrix$Gene_FC <- 1
+    associationMatrix$Peak_FC <- NA
   }
   
   # Normalize using scran method, we had to suppress warnings because
@@ -279,9 +281,9 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
     message(paste0("Creating parameters for omic: ", i))
     
     if (identical(names(omics)[i], "scRNA-seq")){
-      FClist[[paste0("FC_est_", names(omics)[i])]] <- as.numeric(na.omit(associationMatrix$Gene_FC))
+      FClist[[paste0("FC_est_", names(omics)[i])]] <- as.numeric(stats::na.omit(associationMatrix$Gene_FC))
     } else {
-      FClist[[paste0("FC_est_", names(omics)[i])]] <- as.numeric(na.omit(associationMatrix$Peak_FC))
+      FClist[[paste0("FC_est_", names(omics)[i])]] <- as.numeric(stats::na.omit(associationMatrix$Peak_FC))
     }
     
     for(j in 1:N_cellTypes){
@@ -609,13 +611,21 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
   
   cellTypes <- createRangeList(numberCells, names(cellTypes))
   
-  
   # Make the patterns to simulate coexpression
   lpatterns <- make_cluster_patterns(length(cellTypes), clusters = clusters)
   # Get also the indices of cluster patterns that are opposite and will be 
   # important for the regulators
   genereggroup[["opposite_indices"]] <- lpatterns$opposite_indices
   patterns <- lpatterns$patterns
+  
+  ## Check if there is any group that is asking for more repressors
+  # than what is possible according to the number of opposing genes or peaks 
+  # we have available.
+  
+  
+  
+  
+  
   
   # Simulate coexpression
   for (i in 1:N_omics){
@@ -691,7 +701,7 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
         options(Seurat.object.assay.version = "v3")
         seu <- Seurat::CreateAssayObject(counts = sim_list[[i]],
                                           assay = assay_name,
-                                          rownames = newNames, #explicitly specifying rownames
+                                          rownames = rownames(sim_list[[i]]), #explicitly specifying rownames
                                           colnames = colnames(sim_list[[i]])) #and colnames for Seurat obj
         seu_obj[[names(sim_list)[i]]] <- seu
         

@@ -26,28 +26,6 @@ testthat::test_that("Passing an array ('scRNA-seq','scATAC-seq') as omic returns
   testthat::expect_equal(length(res), 2)
 })
 
-#scMOSim function
-testthat::test_that("param_estimation returns a list", {
-  omic_list <- MOSim::sc_omicData(c("scRNA-seq"))
-  conditions <- list('Treg' = c(1:10),'cDC' = c(11:20))
-  testthat::expect_type(MOSim::scMOSim(omic_list, conditions, 
-                          mean = c(2*10^6, 2*10^3), sd = c(10^3, 10^2)),"list")
-})
-
-
-testthat::test_that("Not passing all optional arguments at once returns an error", {
-  omic_list <- MOSim::sc_omicData(c("scRNA-seq","scATAC-seq"))
-  conditions <- list('Treg' = c(1:10),'cDC' = c(11:20))
-  testthat::expect_error(MOSim::scMOSim(omic_list, conditions, sd = c(10^3, 10^2)))
-})
-
-testthat::test_that("scMOSim returns a list with S4 obj as values", {
-  omic_list <- MOSim::sc_omicData(c("scRNA-seq"))
-  cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20))
-  sim <-MOSim::scMOSim(omic_list, cell_types, mean = c(2*10^6, 2*10^3), sd = c(10^3, 10^2))
-  testthat::expect_type(sim[[1]][[1]][[1]], "S4")
-})
-
 
 testthat::test_that("If numberGroups > 1, length(diffGenes) must be == (numberGroups -1)", {
   omicsList <- MOSim::sc_omicData(list("scRNA-seq"))
@@ -57,6 +35,27 @@ testthat::test_that("If numberGroups > 1, length(diffGenes) must be == (numberGr
   testthat::expect_error(MOSim::scMOSim(omicsList, cell_types, numberReps = 2, numberGroups = 2, 
                        diffGenes = c(0.2, 0.2), minFC = 0.25, maxFC = 4,
                        numberCells = NULL, mean = NULL, sd = NULL))
+})
+
+testthat::test_that("Not passing all optional arguments at once returns an error", {
+  omic_list <- MOSim::sc_omicData(c("scRNA-seq","scATAC-seq"))
+  conditions <- list('Treg' = c(1:10),'cDC' = c(11:20))
+  testthat::expect_error(MOSim::scMOSim(omic_list, conditions, sd = c(10^3, 10^2)))
+})
+
+#scMOSim function
+testthat::test_that("param_estimation returns a list", {
+  omic_list <- MOSim::sc_omicData(c("scRNA-seq"))
+  conditions <- list('Treg' = c(1:10),'cDC' = c(11:20))
+  testthat::expect_type(MOSim::scMOSim(omic_list, conditions, 
+                                       mean = c(2*10^6, 2*10^3), sd = c(10^3, 10^2)),"list")
+})
+
+testthat::test_that("scMOSim returns a list with S4 obj as values", {
+  omic_list <- MOSim::sc_omicData(c("scRNA-seq"))
+  cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20))
+  sim <-MOSim::scMOSim(omic_list, cell_types, mean = c(2*10^6, 2*10^3), sd = c(10^3, 10^2))
+  testthat::expect_type(sim[[1]][[1]][[1]], "S4")
 })
 
 #make_cluster_patterns function

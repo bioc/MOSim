@@ -618,15 +618,6 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
   genereggroup[["opposite_indices"]] <- lpatterns$opposite_indices
   patterns <- lpatterns$patterns
   
-  ## Check if there is any group that is asking for more repressors
-  # than what is possible according to the number of opposing genes or peaks 
-  # we have available.
-  
-  
-  
-  
-  
-  
   # Simulate coexpression
   for (i in 1:N_omics){
     coexpr_results <- MOSim::simulate_coexpression(omics[[i]],
@@ -640,7 +631,26 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
     # Get the clusters out
     genereggroup[[paste0("Clusters_", names(omics)[[i]])]] <- coexpr_results$sim_clusters
   }
-
+  
+  ## Check if there is any group that is asking for more repressors
+  # than what is possible according to the number of opposing genes or peaks 
+  # we have available.
+  
+  for (i in 1:numberGroups){
+    # Check repressors
+    repre <- dim(genereggroup[[paste0("GeneRepressed_G", i)]])[1]
+    repre_avail <- t(as.data.frame(lengths(genereggroup$`Clusters_scRNA-seq`)))
+    repre_avail <- repre_avail[genereggroup$opposite_indices[[1]]]
+    repre_avail <- sum(repre_avail)
+    if (repre > repre_avail){
+      stop(paste0("You have asked for ", repre, " repressors (regulatorEffect for group_", 
+                  i, " = ", regulatorEffect[[i]][2], 
+                  "). But since you only allowed for ", clusters, " clusters and ",
+                  feature_no, " features to be split between them, there are only ",
+                  repre_avail, " regulators available to be repressor. We recommend you either request less repressors, or increase the number of features that can be clustered."))
+    }
+  }
+  
   # Start the lists we will need to include in the output
   seu_groups <- list()
   Association_list <- list()
@@ -853,4 +863,4 @@ scOmicSettings <- function(sim, TF = FALSE){
 scOmicResults <- function(sim){
   df <- sim[grepl("Group_", names(sim))]
   return(df)
-  }
+}

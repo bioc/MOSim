@@ -70,7 +70,7 @@ Collate:
     'sc_coexpression.R'
     'sparsim_functions.R'
     'zzz.R'
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
 VignetteBuilder: knitr
 LinkingTo: 
     cpp11,

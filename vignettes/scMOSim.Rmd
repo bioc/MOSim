@@ -8,7 +8,7 @@ author:
 date: "`r Sys.Date()`"
 vignette: >
   %\VignetteEngine{knitr::knitr}
-  %\VignetteIndexEntry{Wiki of how to use scMOSim}
+  %\VignetteIndexEntry{Wiki of how to use sc_mosim}
   %\usepackage[utf8]{inputenc}
 ---
 
@@ -42,7 +42,7 @@ devtools::install_github("ConesaLab/MOSim")
 
 # Simulating Single-Cell Multi-Omics Data
 
-The core of data simulation lies in the scMOSim function, which allows
+The core of data simulation lies in the sc_mosim function, which allows
 you to create synthetic single-cell multi-omics data. Let's explore a
 typical example of its usage, using the default dataset loaded in the package:
 
@@ -61,7 +61,7 @@ cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
 associationList <- data(associationList)
 
 # Simulate multi-omics data with specific parameters
-testing_groups <- scMOSim(
+testing_groups <- sc_mosim(
   omicsList,
   cell_types,
   numberReps = 2,
@@ -79,7 +79,7 @@ testing_groups <- scMOSim(
 ```
 
 In the example above, we load omics data types, specify experimental
-conditions and cell types, and load an association list. The scMOSim
+conditions and cell types, and load an association list. The sc_mosim
 function lets us simulate multi-omics data with various parameters, such
 as the number of replicates, differentially expressed genes, and
 regulatory effects.
@@ -99,7 +99,7 @@ It accepts the following inputs:
 
 ## Providing Custom Data
 
-`scMOSim` also allows you to simulate data resembling characteristics of
+`sc_mosim` also allows you to simulate data resembling characteristics of
 a dataset of your choice. To do so, you need to format your data using
 the `sc_omicData` function. Supported input formats include:
 
@@ -114,7 +114,7 @@ scRNA <- MOSim::sc_omicData("scRNA-seq", data = NULL)
 count <- scRNA[["scRNA-seq"]]
 options(Seurat.object.assay.version = "v3")
 Seurat_obj <- Seurat::CreateAssayObject(counts = count, assay = 'RNA')
-# To format the data into scMOSim-ready format, we pass the seurat
+# To format the data into sc_mosim-ready format, we pass the seurat
 # object containing the count data we extracted into sc_omicData
 omic_list_user <- sc_omicData(c("scRNA-seq"), data = c(Seurat_obj))
 ```
@@ -122,11 +122,11 @@ omic_list_user <- sc_omicData(c("scRNA-seq"), data = c(Seurat_obj))
 The resulting omic_list_user is a named list with "scRNA-seq" as the
 name and your count matrix as the value.
 
-# Running the Simulation: scMOSim
+# Running the Simulation: sc_mosim
 
-## Default scMOSim Simulation
+## Default sc_mosim Simulation
 
-`scMOSim` can simulate scRNA, scATAC and TF count matrices without providing
+`sc_mosim` can simulate scRNA, scATAC and TF count matrices without providing
 any additional arguments. For a basic simulation, you only need to input
 the omics list and cell types. Here's how it's done:
 
@@ -135,14 +135,14 @@ omic_list <- sc_omicData(list("scRNA-seq"))
 cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
       'Memory_B' = c(31:40))
 
-sim <- scMOSim(omic_list, cell_types, TF = TRUE)
+sim <- sc_mosim(omic_list, cell_types, TF = TRUE)
 ```
 
 This will result in simulated raw count matrices for scRNA and TF.
 
-## Customizing the scMOSim Simulation
+## Customizing the sc_mosim Simulation
 
-The `scMOSim` function offers a range of parameters to fine-tune your
+The `sc_mosim` function offers a range of parameters to fine-tune your
 simulation:
 
 -   omics: A named list specifying the omics data types.
@@ -177,7 +177,7 @@ code:
 omic_list <- sc_omicData(c("scRNA-seq", "scATAC-seq"))
 cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
       'Memory_B' = c(31:40))
-sim <- scMOSim(omic_list, cell_types, numberReps = 2, 
+sim <- sc_mosim(omic_list, cell_types, numberReps = 2, 
                numberGroups = 2, diffGenes = list(c(0.2, 0.3)), feature_no = 8000, 
                clusters = 3, mean = c(2*10^6, 1*10^6,2*10^6, 1*10^6), 
                sd = c(5*10^5, 2*10^5, 5*10^5, 2*10^5), 
@@ -186,7 +186,7 @@ sim <- scMOSim(omic_list, cell_types, numberReps = 2,
 
 # Working with Simulation Results
 
-## The scMOSim Simulation Object
+## The sc_mosim Simulation Object
 
 The result of your simulation is stored in a named list with 'sim_sc +
 omic name' as names and Seurat objects as values. Each Seurat object
@@ -211,29 +211,29 @@ relevant information included in the object are:
 ## Retrieving Simulation Settings
 
 To access simulation settings and other constraints for simulation, you can use the
-`scOmicSettings` function. This provides information about the
+`sc_omicSettings` function. This provides information about the
 relationship between genes and peaks, differentially expressed genes,
 regulator types, expression patterns, and fold changes for each gene and
 peak compared to group 1.
 
 ```{r settings, eval = FALSE}
-settings <- scOmicSettings(sim)
+settings <- sc_omicSettings(sim)
 ```
 
-If you run the scMOSim simulation including TF, you can also extract the  
+If you run the sc_mosim simulation including TF, you can also extract the  
 association matrix of TF - target genes regulatory relationships.
 
 ```{r settingsTF, eval = FALSE}
-settings <- scOmicSettings(sim, TF = TRUE)
+settings <- sc_omicSettings(sim, TF = TRUE)
 ```
 
 ## Accessing the Count Data Matrices
 
 You can extract the simulated matrices for all experimental conditions
-and biological replicates using the `scOmicResults` function. This
+and biological replicates using the `sc_omicResults` function. This
 provides you with the synthetic data for further analysis and
 visualization.
 
 ```{r results, eval = FALSE}
-res <- scOmicResults(sim)
+res <- sc_omicResults(sim)
 ```

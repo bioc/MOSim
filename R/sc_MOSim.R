@@ -321,7 +321,7 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
 
 
 
-#' scMOSim
+#' sc_mosim
 #'
 #' Performs multiomic simulation of single cell datasets
 #'
@@ -379,9 +379,9 @@ sc_param_estimation <- function(omics, cellTypes, diffGenes = list(c(0.2, 0.2)),
 #' omic_list <- sc_omicData(list("scRNA-seq"))
 #' cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
 #' 'Memory_B' = c(31:40))
-#' sim <- scMOSim(omic_list, cell_types, regulatorEffect = list(c(0.1, 0.2)))
+#' sim <- sc_mosim(omic_list, cell_types)
 #'
-scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1, 
+sc_mosim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1, 
                     diffGenes = NULL, minFC = 0.25, maxFC = 4,
                     numberCells = NULL, mean = NULL, sd = NULL, noiseRep = 0.1 , 
                     noiseGroup = 0.5, regulatorEffect = NULL, associationList = NULL, 
@@ -635,19 +635,20 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
   ## Check if there is any group that is asking for more repressors
   # than what is possible according to the number of opposing genes or peaks 
   # we have available.
-  
-  for (i in 1:numberGroups){
-    # Check repressors
-    repre <- dim(genereggroup[[paste0("GeneRepressed_G", i)]])[1]
-    repre_avail <- t(as.data.frame(lengths(genereggroup$`Clusters_scRNA-seq`)))
-    repre_avail <- repre_avail[genereggroup$opposite_indices[[1]]]
-    repre_avail <- sum(repre_avail)
-    if (repre > repre_avail){
-      stop(paste0("You have asked for ", repre, " repressors (regulatorEffect for group_", 
-                  i, " = ", regulatorEffect[[i]][2], 
-                  "). But since you only allowed for ", clusters, " clusters and ",
-                  feature_no, " features to be split between them, there are only ",
-                  repre_avail, " regulators available to be repressor. We recommend you either request less repressors, or increase the number of features that can be clustered."))
+  if (N_omics > 1){
+    for (i in 1:numberGroups){
+      # Check repressors
+      repre <- dim(genereggroup[[paste0("GeneRepressed_G", i)]])[1]
+      repre_avail <- t(as.data.frame(lengths(genereggroup$`Clusters_scRNA-seq`)))
+      repre_avail <- repre_avail[genereggroup$opposite_indices[[1]]]
+      repre_avail <- sum(repre_avail)
+      if (repre > repre_avail){
+        stop(paste0("You have asked for ", repre, " repressors (regulatorEffect for group_", 
+                    i, " = ", regulatorEffect[[i]][2], 
+                    "). But since you only allowed for ", clusters, " clusters and ",
+                    feature_no, " features to be split between them, there are only ",
+                    repre_avail, " regulators available to be repressor. We recommend you either request less repressors, or increase the number of features that can be clustered."))
+      }
     }
   }
   
@@ -753,9 +754,9 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
 
 
 
-#' scOmicSettings
+#' sc_omicSettings
 #'
-#' @param sim a simulated object from scMOSim function
+#' @param sim a simulated object from sc_mosim function
 #' @param TF OPTIONAL default is FALSE, if true, extract TF association matrix
 #'
 #' @return list of Association matrices explaining the effects of each
@@ -767,9 +768,9 @@ scMOSim <- function(omics, cellTypes, numberReps = 1, numberGroups = 1,
 #' cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
 #' 'Memory_B' = c(31:40))
 #' omicsList <- sc_omicData(list("scRNA-seq"))
-#' sim <- scMOSim(omicsList, cell_types)
-#' res <- scOmicSettings(sim)
-scOmicSettings <- function(sim, TF = FALSE){
+#' sim <- sc_mosim(omicsList, cell_types)
+#' res <- sc_omicSettings(sim)
+sc_omicSettings <- function(sim, TF = FALSE){
   asma <- sim$AssociationMatrices
   FC <- sim$FC
   
@@ -848,9 +849,9 @@ scOmicSettings <- function(sim, TF = FALSE){
   return(asma)
 }
 
-#' scOmicResults
+#' sc_omicResults
 #'
-#' @param sim a simulated object from scMOSim function
+#' @param sim a simulated object from sc_mosim function
 #' @return list of seurat objects with simulated data
 #' @export
 #' @examples
@@ -858,9 +859,9 @@ scOmicSettings <- function(sim, TF = FALSE){
 #' cell_types <- list('Treg' = c(1:10),'cDC' = c(11:20),'CD4_TEM' = c(21:30),
 #' 'Memory_B' = c(31:40))
 #' omicsList <- sc_omicData(list("scRNA-seq"))
-#' sim <- scMOSim(omicsList, cell_types)
-#' res <- scOmicResults(sim)
-scOmicResults <- function(sim){
+#' sim <- sc_mosim(omicsList, cell_types)
+#' res <- sc_omicResults(sim)
+sc_omicResults <- function(sim){
   df <- sim[grepl("Group_", names(sim))]
   return(df)
 }
